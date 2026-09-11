@@ -2,7 +2,7 @@
 
 香橙派 **Zero3W** 温控散热风扇完整方案:定制 CNC 铝合金散热器 + 2004/2006 微型 PWM 风扇 + Python 温控脚本(开机自启动)。
 
-按 CPU 温度自动调速,**35°C 以下停转、60°C 以上全速、中间线性过渡**,低负载安静、高负载压得住(满载实测约 62°C)。新手按本文档操作即可复现整套硬件与软件部署。
+按 CPU 温度自动调速,**35°C 以下停转、60°C 以上全速、中间线性过渡**,低负载安静、高负载压得住(CPU+GPU 双烤 10 分钟稳定在约 63°C,室温 24°C)。新手按本文档操作即可复现整套硬件与软件部署。
 
 > 配套图片:引脚功能图见 [`img/pin_map.webp`](img/pin_map.webp),实际接线示意图见 [`img/pin_connection.jpg`](img/pin_connection.jpg)。
 
@@ -280,7 +280,12 @@ journalctl -u pwm-fan -f
 | 满载 + 停转状态 | 90 秒内 49 → 64°C 持续攀升 | 0%(对照组,验证接线方向) |
 | 满载 + 自动温控 | 约 62°C 时占空比自动拉满 | 100%,温度稳定在 62 ~ 64°C |
 | 满载结束 30 秒 | 回落到约 54°C | 占空比自动平滑降回 |
+| **CPU+GPU 双烤 10 分钟** | **温度稳定在约 63°C(室温 24°C)** | **100%(曲线 60°C 即全速)**,见下图 |
 | 重启后 | 服务 4 秒内自动启动并接管 PWM | 正常 |
+
+![CPU+GPU 双烤 10 分钟温度曲线](img/benchmark.png)
+
+> CPU+GPU 双烤 10 分钟,温度稳定在约 63°C(室温 24°C),无过热降频。
 
 ---
 
@@ -295,7 +300,8 @@ OrangePiZero3W-FanControl
 ├── install.sh                    # 一键安装脚本(在开发板上运行)
 ├── img
 │   ├── pin_map.webp              # Zero3W 40pin 引脚功能图
-│   └── pin_connection.jpg        # 风扇与主板实际接线照片
+│   ├── pin_connection.jpg        # 风扇与主板实际接线照片
+│   └── benchmark.png             # CPU+GPU 双烤 10 分钟温度曲线(稳定约 63°C)
 ├── cad_files                     # SolidWorks 图纸(CNC 加工用)
 │   ├── OrangePiZero3W.SLDASM     # 整机装配体
 │   ├── HeatSink.SLDPRT           # 散热器主体(CNC 加工件)
