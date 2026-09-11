@@ -1,0 +1,14 @@
+[Unit]
+Description=Orange Pi Zero3W PWM Fan Controller (CPU temperature)
+After=local-fs.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/pwm-fan.py
+Restart=always
+RestartSec=5
+Nice=-10
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target
