@@ -1,170 +1,173 @@
 # OrangePiZero3W-FanControl
 
-香橙派 **Zero3W** 温控散热风扇完整方案:定制 CNC 铝合金散热器 + 2004/2006 微型 PWM 风扇 + Python 温控脚本(开机自启动)。
+> Language: **English** | [简体中文](README.zh-CN.md)
 
-按 CPU 温度自动调速,**35°C 以下停转、60°C 以上全速、中间线性过渡**,低负载安静、高负载压得住(CPU+GPU 双烤 10 分钟稳定在约 63°C,室温 24°C)。新手按本文档操作即可复现整套硬件与软件部署。
+A complete temperature-controlled cooling solution for the Orange Pi **Zero3W**: custom CNC aluminum heatsink + 2004/2006 micro PWM fan + Python fan-control script (auto-starts on boot).
 
-> 配套图片:引脚功能图见 [`img/pin_map.webp`](img/pin_map.webp),实际接线示意图见 [`img/pin_connection.jpg`](img/pin_connection.jpg)。
+The fan speed follows the CPU temperature automatically — **off below 35°C, full speed above 60°C, linear in between** — quiet at low load and cool under heavy load (CPU+GPU dual stress: stable at ~63°C for 10 min at 24°C ambient). This guide is written so beginners can reproduce both the hardware and the software from scratch.
 
-![实际接线示意图](img/pin_connection.jpg)
+> Related images: pinout diagram at [`img/pin_map.webp`](img/pin_map.webp), actual wiring photo at [`img/pin_connection.jpg`](img/pin_connection.jpg).
 
-![Zero3W 40pin 引脚功能图](img/pin_map.webp)
+![Actual wiring photo](img/pin_connection.jpg)
 
----
-
-## 目录
-
-- [特性](#特性)
-- [硬件部分](#硬件部分)
-  - [材料清单 BOM](#材料清单-bom)
-  - [风扇规格(2004,外购)](#风扇规格2004外购)
-  - [CNC 加工(铨洲智造)](#cnc-加工铨洲智造)
-  - [接线方法](#接线方法)
-- [软件部署](#软件部署)
-  - [系统准备:启用 PWM0 overlay](#系统准备启用-pwm0-overlay)
-  - [方式一:一键安装(推荐)](#方式一-一键安装推荐)
-  - [方式二:手动安装](#方式二手动安装)
-- [验证与测试](#验证与测试)
-- [温控曲线与调参](#温控曲线与调参)
-- [工作原理](#工作原理)
-- [实测数据](#实测数据)
-- [目录结构](#目录结构)
-- [常见问题 FAQ](#常见问题-faq)
-- [许可](#许可)
+![Zero3W 40-pin header pinout](img/pin_map.webp)
 
 ---
 
-## 特性
+## Table of Contents
 
-- ✅ **35°C 停转 ~ 60°C 全速**的线性温控曲线,兼顾散热与噪音
-- ✅ **滞回防抖**:超过 36.5°C 才启动、低于 35°C 才停转,避免临界温度反复启停
-- ✅ **起转保护**:启动瞬间以 100% 占空比"踢一脚"0.6 秒,确保低转速下可靠起转
-- ✅ **最低运行占空比 25%**:防止风扇在低占空比下堵转/异响
-- ✅ **EMA 平滑**:转速渐变,无突然加速的噪音
-- ✅ **安全兜底**:温度读取失败或程序异常退出时,风扇自动置为全速;服务崩溃自动重启
-- ✅ **极性自适应**:本板 PWM 输出极性为 `inversed`(引脚波形与 sysfs 反相),脚本自动取反映射,保证"脚本里的占空比 % = 实际转速 %"
-- ✅ **纯 Python 标准库**实现,无第三方依赖,占用约 6MB 内存
+- [Features](#features)
+- [Hardware](#hardware)
+  - [Bill of Materials (BOM)](#bill-of-materials-bom)
+  - [Fan Specs (2004, off-the-shelf)](#fan-specs-2004-off-the-shelf)
+  - [CNC Machining (Quanzhou Zhizao / 铨洲智造)](#cnc-machining-quanzhou-zhizao--铨洲智造)
+  - [Wiring](#wiring)
+- [Software Deployment](#software-deployment)
+  - [Prerequisites: Enable the PWM0 Device-Tree Overlay](#prerequisites-enable-the-pwm0-device-tree-overlay)
+  - [Option 1: One-Click Install (recommended)](#option-1-one-click-install-recommended)
+  - [Option 2: Manual Install](#option-2-manual-install)
+- [Verification & Testing](#verification--testing)
+- [Temperature Curve & Tuning](#temperature-curve--tuning)
+- [How It Works](#how-it-works)
+- [Measured Data](#measured-data)
+- [Repository Layout](#repository-layout)
+- [FAQ](#faq)
+- [License](#license)
 
 ---
 
-## 硬件部分
+## Features
 
-### 材料清单 BOM
+- ✅ Linear temperature curve: **0% duty at 35°C → 100% at 60°C**, balancing cooling and noise
+- ✅ **Hysteresis**: the fan starts only above 36.5°C and stops only below 35°C — no flapping around the threshold
+- ✅ **Spin-up kick**: a brief 100% pulse for 0.6 s on startup, so the fan reliably starts at low duty cycles
+- ✅ **Minimum running duty 25%**: avoids stall/whine at very low duty cycles
+- ✅ **EMA smoothing**: gradual speed changes, no sudden RPM jumps
+- ✅ **Fail-safe**: the fan is forced to full speed if temperature reads fail or the process exits; the service auto-restarts on crash
+- ✅ **Polarity auto-detection**: this board's PWM output is `inversed` (pin waveform inverted vs. sysfs values); the script compensates automatically, so "duty % in the script = actual fan speed %"
+- ✅ **Pure Python stdlib**, no third-party dependencies, ~6 MB RAM
 
-| 名称 | 规格 | 数量 | 来源/说明 |
+---
+
+## Hardware
+
+### Bill of Materials (BOM)
+
+| Item | Spec | Qty | Source / Notes |
 | --- | --- | --- | --- |
-| 香橙派 Zero3W | — | 1 | 本项目验证于官方镜像 Ubuntu 22.04(Orange Pi 1.0.0 Jammy),内核 `6.6.98-sun60iw2` |
-| 散热器主体 | 图纸见 `cad_files/HeatSink.SLDPRT` | 1 | 铝合金,**铨洲智造 CNC 来图加工** |
-| 散热鳍片 | 16×16×6 mm 铝散热片 | 按图纸 | 🛒 **外购**:[淘宝链接](https://item.taobao.com/item.htm?id=725883202144&skuId=5036273268642) |
-| 底部安装板/外壳 | 图纸见 `cad_files/BottomShell.SLDPRT` | 1 | **CNC 加工**,也可导出 STL 用 **PETG 材质 3D 打印**(更经济) |
-| 微型风扇 | **2004**(20×20×4 mm)或 **2006**(20×20×6 mm),5V,**支持 PWM 调速** | 1 | 🛒 **外购**:[1688 链接(2004)](https://detail.1688.com/offer/841908586658.html),规格见下方 |
-| 连接线 | 杜邦线等 | 若干 | 接线见下方图示 |
-| 固定螺丝 | 按图纸 | 若干 | 散热器与主板固定用 |
+| Orange Pi Zero3W | — | 1 | Verified on the official Ubuntu 22.04 image (Orange Pi 1.0.0 Jammy), kernel `6.6.98-sun60iw2` |
+| Heatsink body | See `cad_files/HeatSink.SLDPRT` | 1 | Aluminum, **CNC machined to drawing (Quanzhou Zhizao / 铨洲智造)** |
+| Heatsink fin | 16×16×6 mm aluminum fin | Per drawing | 🛒 **Off-the-shelf**: [Taobao link](https://item.taobao.com/item.htm?id=725883202144&skuId=5036273268642) |
+| Bottom plate / shell | See `cad_files/BottomShell.SLDPRT` | 1 | **CNC machining**, or export an STL and **3D print in PETG** (cheaper) |
+| Micro fan | **2004** (20×20×4 mm) or **2006** (20×20×6 mm), 5 V, **PWM speed control** | 1 | 🛒 **Off-the-shelf**: [1688 link (2004)](https://detail.1688.com/offer/841908586658.html), specs below |
+| Wires | Dupont wires etc. | Several | See the wiring section below |
+| Screws | Per drawing | Several | Heatsink/board mounting |
 
-### 风扇规格(2004,外购)
+### Fan Specs (2004, off-the-shelf)
 
-购买链接:[1688](https://detail.1688.com/offer/841908586658.html)(2006 为同尺寸兼容型号,图纸中参考型号为 SENKAYS 2006)
+Purchase link: [1688](https://detail.1688.com/offer/841908586658.html) (2006 is the same-footprint compatible size; the CAD reference model is a SENKAYS 2006)
 
-| 参数 | 数值 |
+| Parameter | Value |
 | --- | --- |
-| 尺寸 | 20×20×4 mm(2004) |
-| 电压 | 5V |
-| 功率 | 0.34 W |
-| 转速 | 5000 ~ 15000 RPM |
-| 风量 | 0.5 ~ 1.20 CFM |
-| 风压 | 1.83 ~ 8.35 mmH₂O |
-| 噪音 | 15 ~ 29 dB-A |
-| 重量 | 2 g |
+| Dimensions | 20×20×4 mm (2004) |
+| Voltage | 5 V |
+| Power | 0.34 W |
+| Speed | 5000 ~ 15000 RPM |
+| Airflow | 0.5 ~ 1.20 CFM |
+| Static pressure | 1.83 ~ 8.35 mmH₂O |
+| Noise | 15 ~ 29 dB-A |
+| Weight | 2 g |
 
-### CNC 加工(铨洲智造)
+### CNC Machining (Quanzhou Zhizao / 铨洲智造)
 
-`cad_files/` 目录内为 SolidWorks 图纸:
+The `cad_files/` directory contains SolidWorks drawings:
 
-| 文件 | 说明 | 是否加工 |
+| File | Description | Production |
 | --- | --- | --- |
-| `OrangePiZero3W.SLDASM` | 整机装配体(含风扇、主板、散热器) | 参考 |
-| `HeatSink.SLDPRT` | 散热器主体 | ✅ CNC 加工件 |
-| `BottomShell.SLDPRT` | 底部安装板/外壳 | ✅ CNC 加工件;**也可导出 STL 用 PETG 材质 3D 打印**(更经济) |
-| `Single16x16x6.SLDPRT` | 16×16×6 mm 散热鳍片单体 | 🛒 外购件(仅作装配参考):[淘宝链接](https://item.taobao.com/item.htm?id=725883202144&skuId=5036273268642) |
-| `Zero3W.SLDPRT` | 香橙派 Zero3W 主板模型 | 参考(非加工) |
-| `Fan 2006 (SENKAYS).SLDASM` | 2006 风扇装配体(SENKAYS 型号) | 🛒 外购件(参考) |
+| `OrangePiZero3W.SLDASM` | Full assembly (fan + board + heatsink) | Reference |
+| `HeatSink.SLDPRT` | Heatsink body | ✅ CNC machined part |
+| `BottomShell.SLDPRT` | Bottom plate / shell | ✅ CNC machined part; **or export an STL and 3D print in PETG** (cheaper) |
+| `Single16x16x6.SLDPRT` | 16×16×6 mm fin unit | 🛒 Off-the-shelf (assembly reference only): [Taobao link](https://item.taobao.com/item.htm?id=725883202144&skuId=5036273268642) |
+| `Zero3W.SLDPRT` | Orange Pi Zero3W board model | Reference (not machined) |
+| `Fan 2006 (SENKAYS).SLDASM` | 2006 fan assembly (SENKAYS) | 🛒 Off-the-shelf (reference) |
 
-下单流程:
+Ordering steps:
 
-1. 打开铨洲智造官网/小程序,**上传需加工的零件图**(建议同时另存一份 **STEP** 格式,兼容性最好);
-2. 选择材料(建议 **6061 铝合金**)与表面处理(建议**喷砂 + 阳极氧化**,利于散热与绝缘);
-3. 平台自动报价,确认后下单即可。
+1. Open the Quanzhou Zhizao (铨洲智造) website / mini-program and **upload the parts to be machined** (also export a **STEP** copy for the best compatibility);
+2. Choose the material (**6061 aluminum** recommended) and surface finish (**sandblasting + anodizing** recommended — better cooling and insulation);
+3. The platform quotes automatically; confirm and place the order.
 
-> 图纸为标准 SolidWorks 格式,也可交给任意支持来图加工的 CNC 厂家;更换厂家时建议用 STEP 格式传图。
+> The drawings are standard SolidWorks format and can be sent to any CNC shop that accepts customer drawings; use STEP format when switching vendors.
 >
-> 底部安装板/外壳若不追求金属质感,可把 `BottomShell.SLDPRT` 导出为 STL,用 **PETG 材质 3D 打印**,成本更低;散热鳍片(16×16×6 mm)为成品铝散热片,直接按上方淘宝链接购买,无需加工。
+> If you don't need a metal bottom plate, export `BottomShell.SLDPRT` as an STL and **3D print it in PETG** — much cheaper. The heatsink fin (16×16×6 mm) is an off-the-shelf aluminum part; buy it from the Taobao link above — no machining needed.
 
-### 接线方法
+### Wiring
 
-将风扇连接到 Zero3W 的 40pin 排针:
+Connect the fan to the Zero3W's 40-pin header:
 
-| 风扇线 | 接到 Zero3W | 说明 |
+| Fan wire | Zero3W pin | Notes |
 | --- | --- | --- |
-| **PWM 调速线** | **PWM0(PB4)引脚** | 具体位置见 [`img/pin_map.webp`](img/pin_map.webp) |
-| 正极(+) | 5V 引脚(排针 **2/4** 脚) | 若风扇是 3.3V 版本,接 3.3V(排针 **1/17** 脚) |
-| 负极(-) | GND 引脚(排针 **6/9/14/20/25/30/34/39** 任一脚) | — |
+| **PWM wire** | **PWM0 (PB4)** | See [`img/pin_map.webp`](img/pin_map.webp) for the exact position |
+| Positive (+) | 5 V pins (**2/4**) | If your fan is a 3.3 V model, use the 3.3 V pins (**1/17**) |
+| Negative (−) | Any GND pin (**6/9/14/20/25/30/34/39**) | — |
 
-实际接线请对照照片 [`img/pin_connection.jpg`](img/pin_connection.jpg)。
+Compare with the actual photo [`img/pin_connection.jpg`](img/pin_connection.jpg) before powering on.
 
-> ⚠️ **注意**:正负极接反可能损坏风扇;通电前请先对照照片与引脚图确认。PB4 的 PWM 输出在本项目中只用于传输调速信号,风扇供电来自 5V/GND。
+> ⚠️ **Caution**: reversing the power wires can damage the fan — double-check against the photo and the pinout diagram first. In this project the PB4 PWM output only carries the speed-control signal; fan power comes from 5 V/GND.
 
 ---
 
-## 软件部署
+## Software Deployment
 
-### 系统准备:启用 PWM0 overlay
+### Prerequisites: Enable the PWM0 Device-Tree Overlay
 
-脚本通过 `/sys/class/pwm/pwmchip0` 控制 PB4 的 PWM 输出,需要先启用设备树 overlay(**新烧录的系统默认未启用**):
+The script drives the PB4 PWM output through `/sys/class/pwm/pwmchip0`; the overlay must be enabled first (**fresh images ship with it disabled**):
 
-**方式一(图形界面,推荐新手)**:
+**Option 1 (GUI, recommended)**:
 
 ```bash
 sudo orangepi-config
-# System -> Hardware -> 找到 pwm0 勾选 -> Save -> 重启
+# System -> Hardware -> tick "pwm0" -> Save -> reboot
 ```
 
-**方式二(直接改配置)**:
+**Option 2 (edit the config directly)**:
 
 ```bash
-# 编辑 /boot/orangepiEnv.txt,在 overlays= 行添加 pwm0(多个 overlay 用空格分隔)
+# Edit /boot/orangepiEnv.txt and add pwm0 to the overlays= line
+# (separate multiple overlays with spaces)
 sudo nano /boot/orangepiEnv.txt
-# 例如: overlays=pwm0
+# e.g. overlays=pwm0
 sudo reboot
 ```
 
-**验证是否生效**:
+**Verify it took effect**:
 
 ```bash
 ls /sys/class/pwm/
-# 能看到 pwmchip0 即成功;看不到请检查上面的步骤
+# pwmchip0 must be listed; otherwise re-check the steps above
 ```
 
-> 说明:官方镜像默认账号 `orangepi` / 密码 `orangepi`(若你已修改请用你自己的);Armbian 用户可在 `sudo armbian-config` 的 Hardware 里启用 PWM overlay,操作类似。
+> Note: official images use the default account `orangepi` / `orangepi` (use your own if you changed it); Armbian users can enable the PWM overlay under Hardware in `sudo armbian-config`.
 
-### 方式一:一键安装(推荐)
+### Option 1: One-Click Install (recommended)
 
-在开发板上执行:
+Run on the board:
 
 ```bash
-# 安装 git(已装可跳过)
+# Install git (skip if already installed)
 sudo apt update && sudo apt install -y git
 
-# 下载本项目
+# Get this repository
 git clone https://github.com/iowqi/OrangePiZero3W-FanControl.git
 cd OrangePiZero3W-FanControl
 
-# 一键安装:复制脚本到系统目录 + 注册并启动 systemd 服务
+# One-click: install the script + register and start the systemd service
 sudo bash install.sh
 ```
 
-安装完成后会打印服务状态,看到 `active (running)` 即成功。**之后每次重启开发板,服务都会自动启动**,无需任何手动操作。
+The installer prints the service status at the end — `active (running)` means success. **Afterwards the service starts automatically on every boot**; nothing else to do.
 
-后续更新脚本:
+Updating later:
 
 ```bash
 cd ~/OrangePiZero3W-FanControl
@@ -172,15 +175,15 @@ git pull
 sudo bash install.sh
 ```
 
-### 方式二:手动安装
+### Option 2: Manual Install
 
-适合没有 git / 离线环境。在**电脑上**把文件传到板子:
+For no-git / offline setups. From your **PC**, copy the files to the board:
 
 ```bash
-scp pwm-fan.py pwm-fan.service orangepi@<板子IP>:~/
+scp pwm-fan.py pwm-fan.service orangepi@<board-IP>:~/
 ```
 
-然后 SSH 登录开发板:
+Then SSH into the board:
 
 ```bash
 sudo install -m 0755 -o root -g root ~/pwm-fan.py /usr/local/sbin/pwm-fan.py
@@ -191,175 +194,176 @@ sudo systemctl enable --now pwm-fan.service
 
 ---
 
-## 验证与测试
+## Verification & Testing
 
 ```bash
-# 1. 服务状态(active (running) 即正常)
+# 1. Service status ("active (running)" = OK)
 systemctl status pwm-fan
 
-# 2. 实时日志:每行显示 "温度 xx.x°C -> 占空比 xx%"
+# 2. Live log: one "temp xx.x°C -> duty xx%" line per change
 journalctl -u pwm-fan -f
 
-# 3. 查看当前温度与 PWM 状态
+# 3. Show current temperature & PWM state
 sudo /usr/local/sbin/pwm-fan.py --show
 
-# 4. 手动让风扇以 50% 转速转起来(测试风扇与接线是否正常)
+# 4. Manually spin the fan at 50% (checks fan + wiring)
 sudo /usr/local/sbin/pwm-fan.py --test 50
 ```
 
-**满载压测(可选)**:开 4 个满载进程,观察日志中温度升到 60°C 以上时占空比自动拉到 100%:
+**Full-load test (optional)**: start 4 busy-loop processes and watch the log — duty automatically ramps to 100% once the temperature passes 60°C:
 
 ```bash
 for i in 1 2 3 4; do yes > /dev/null & done
 journalctl -u pwm-fan -f
-# 观察结束后停掉压测: pkill yes
+# stop the load when done: pkill yes
 ```
 
-**重启自启动验证**:`sudo reboot` 后重新登录,执行 `systemctl status pwm-fan`,服务应在开机几秒内自动运行。
+**Boot auto-start check**: `sudo reboot`, log back in, then `systemctl status pwm-fan` — the service should be running within seconds of boot.
 
 ---
 
-## 温控曲线与调参
+## Temperature Curve & Tuning
 
-默认曲线(**需求值:35°C=0%,60°C=100%**):
+Default curve (**spec: 35°C = 0%, 60°C = 100%**):
 
-| 温度 | 目标转速 |
+| Temperature | Target speed |
 | --- | --- |
-| ≤ 35°C | 0%(停转) |
-| 35 ~ 60°C | 线性 0% → 100% |
-| ≥ 60°C | 100%(全速) |
+| ≤ 35°C | 0% (stopped) |
+| 35 ~ 60°C | linear 0% → 100% |
+| ≥ 60°C | 100% (full speed) |
 
-叠加的机制:
+Extra mechanisms:
 
-| 机制 | 默认值 | 作用 |
+| Mechanism | Default | Purpose |
 | --- | --- | --- |
-| 滞回 | 36.5°C 启动 / 35°C 停转 | 防止临界温度反复启停 |
-| 起转踢一脚 | 100% × 0.6s | 保证风扇从静止可靠起转 |
-| 最低运行占空比 | 25% | 防止运行中低占空比堵转 |
-| EMA 平滑 | α=0.35,采样 3s | 转速渐变,降低噪音 |
-| 异常兜底 | 全速 | 读温失败或进程退出时保证散热 |
+| Hysteresis | start at 36.5°C / stop at 35°C | prevents flapping around the threshold |
+| Spin-up kick | 100% × 0.6 s | guarantees a reliable start from standstill |
+| Minimum running duty | 25% | prevents stall at very low duty cycles |
+| EMA smoothing | α=0.35, poll every 3 s | gradual speed changes, less noise |
+| Fail-safe | full speed | keeps cooling when temperature reads fail or the process exits |
 
-所有参数集中在 `pwm-fan.py` 顶部,**改完执行 `sudo systemctl restart pwm-fan` 生效**:
+All parameters live at the top of `pwm-fan.py`; **edit and run `sudo systemctl restart pwm-fan` to apply**:
 
-| 参数 | 默认 | 说明 |
+| Parameter | Default | Meaning |
 | --- | --- | --- |
-| `TEMP_MIN` / `TEMP_MAX` | 35.0 / 60.0 | 停转温度 / 全速温度,线性曲线的两端 |
-| `TEMP_ON` / `TEMP_OFF` | 36.5 / 35.0 | 滞回启动 / 停转阈值 |
-| `MIN_DUTY` | 25.0 | 运行中的最低占空比 % |
-| `KICK_DUTY` / `KICK_SECONDS` | 100.0 / 0.6 | 起转瞬时占空比与时长 |
-| `POLL_INTERVAL` | 3.0 | 温度采样周期(秒) |
-| `EMA_ALPHA` | 0.35 | 平滑系数,越大响应越快(0~1) |
-| `FORCE_INVERT` | `None` | 极性映射:自动 / `True` / `False`(见下文) |
-| `FAILSAFE_DUTY` | 100.0 | 异常时的安全占空比 % |
-| `PWM_PERIOD_NS` | 40000 | 25 kHz,一般无需修改 |
+| `TEMP_MIN` / `TEMP_MAX` | 35.0 / 60.0 | stop / full-speed temperatures (curve endpoints) |
+| `TEMP_ON` / `TEMP_OFF` | 36.5 / 35.0 | hysteresis start / stop thresholds |
+| `MIN_DUTY` | 25.0 | minimum duty % while running |
+| `KICK_DUTY` / `KICK_SECONDS` | 100.0 / 0.6 | spin-up duty % and duration |
+| `POLL_INTERVAL` | 3.0 | temperature polling period (s) |
+| `EMA_ALPHA` | 0.35 | smoothing factor 0~1, larger = faster response |
+| `FORCE_INVERT` | `None` | polarity mapping: auto / `True` / `False` (see below) |
+| `FAILSAFE_DUTY` | 100.0 | safe duty % applied on failure |
+| `PWM_PERIOD_NS` | 40000 | 25 kHz, normally leave unchanged |
 
-### 关于"极性 inversed"(重要)
+### About the "inversed" Polarity (important)
 
-本板 PWM0 引脚波形与 sysfs 的 `duty_cycle` 值**反相**:写入 `duty_cycle=40000` 引脚输出低电平(风扇停),写入 `0` 输出高电平(全速)。脚本会自动检测极性并**取反映射**,所以脚本里的"占空比 %"永远等于"转速 %",你不需要关心这个细节。
+On this board the PWM0 pin waveform is **inverted** relative to the sysfs `duty_cycle` value: writing `duty_cycle=40000` drives the pin low (fan stopped), while writing `0` drives it high (full speed). The script detects the polarity and **inverts the mapping automatically**, so the duty % in the script always equals the actual fan speed % — you don't need to care about this detail.
 
-只有在**更换了风扇电路导致方向相反**时才需要动它:把 `FORCE_INVERT` 改为 `True` 或 `False` 强制指定。启动日志会打印当前映射方式(`映射取反(inversed)` / `映射直通`),可用 `journalctl -u pwm-fan -n 20` 查看。
+Only touch it if a different fan circuit reverses the direction: set `FORCE_INVERT` to `True` or `False` to force the mapping. The startup log prints the active mapping (`映射取反(inversed)` / `映射直通`); check it with `journalctl -u pwm-fan -n 20`.
 
 ---
 
-## 工作原理
+## How It Works
 
-1. **读温度**:脚本自动扫描 `/sys/class/thermal/thermal_zone*/type`,挑选所有含 `cpu` 的温度节点并取**最高值**(兼顾大小核,单位毫摄氏度);
-2. **算占空比**:按上面的曲线与滞回/平滑逻辑计算出目标占空比;
-3. **写 PWM**:通过 sysfs(`/sys/class/pwm/pwmchip0/pwm0`)设置 25 kHz 周期与占空比,无需额外驱动;
-4. **托管运行**:systemd 服务开机自启、崩溃自动重启(`Restart=always`),日志输出到 `journalctl`。
+1. **Read temperature**: the script scans `/sys/class/thermal/thermal_zone*/type`, picks every node whose type contains `cpu`, and takes the **maximum** (covers big.LITTLE clusters; values are in millidegrees Celsius);
+2. **Compute duty**: apply the curve above plus hysteresis/smoothing to obtain the target duty cycle;
+3. **Write PWM**: set the 25 kHz period and duty via sysfs (`/sys/class/pwm/pwmchip0/pwm0`) — no extra driver required;
+4. **Run as a service**: systemd starts it at boot and restarts it on crash (`Restart=always`); logs go to `journalctl`.
 
 ---
 
-## 实测数据
+## Measured Data
 
-以下为本仓库代码在 Zero3W 上的验证记录(室温约 25°C,压测 = 4 核 `yes` busy-loop):
+Recorded on a Zero3W running this repository's code (stress = 4-core `yes` busy-loop unless noted):
 
-| 场景 | 温度表现 | 风扇 |
+| Scenario | Temperature | Fan |
 | --- | --- | --- |
-| 待机 | 约 48 ~ 50°C | 约 50 ~ 60% 转速 |
-| 满载 + 停转状态 | 90 秒内 49 → 64°C 持续攀升 | 0%(对照组,验证接线方向) |
-| 满载 + 自动温控 | 约 62°C 时占空比自动拉满 | 100%,温度稳定在 62 ~ 64°C |
-| 满载结束 30 秒 | 回落到约 54°C | 占空比自动平滑降回 |
-| **CPU+GPU 双烤 10 分钟** | **温度稳定在约 63°C(室温 24°C)** | **100%(曲线 60°C 即全速)**,见下图 |
-| 重启后 | 服务 4 秒内自动启动并接管 PWM | 正常 |
+| Idle | ~48 ~ 50°C | ~50 ~ 60% duty |
+| Full load, fan forced off | climbed 49 → 64°C within 90 s | 0% (control group, verifies wiring direction) |
+| Full load, automatic control | duty hits 100% at ~62°C | 100%, stable at 62 ~ 64°C |
+| 30 s after load ends | back to ~54°C | duty ramps down smoothly |
+| **CPU+GPU dual stress, 10 min** | **stable at ~63°C (24°C ambient)** | **100% (the curve gives full speed at 60°C)**, chart below |
+| After reboot | service auto-starts and takes over PWM within 4 s | normal |
 
-![CPU+GPU 双烤 10 分钟温度曲线](img/benchmark.png)
+![CPU+GPU 10-minute dual-stress temperature chart](img/benchmark.png)
 
-> CPU+GPU 双烤 10 分钟,温度稳定在约 63°C(室温 24°C),无过热降频。
+> CPU+GPU dual stress for 10 minutes: temperature stable at ~63°C (24°C ambient), no thermal throttling.
 
 ---
 
-## 目录结构
+## Repository Layout
 
 ```
 OrangePiZero3W-FanControl
-├── README.md                     # 本说明文档
-├── LICENSE                       # MIT 许可证
-├── pwm-fan.py                    # 温控主程序(Python3 标准库)
-├── pwm-fan.service               # systemd 服务单元
-├── install.sh                    # 一键安装脚本(在开发板上运行)
+├── README.md                     # This document (English, shown by default)
+├── README.zh-CN.md               # 简体中文文档
+├── LICENSE                       # MIT License
+├── pwm-fan.py                    # Fan-control main program (Python3 stdlib)
+├── pwm-fan.service               # systemd service unit
+├── install.sh                    # One-click installer (run on the board)
 ├── img
-│   ├── pin_map.webp              # Zero3W 40pin 引脚功能图
-│   ├── pin_connection.jpg        # 风扇与主板实际接线照片
-│   └── benchmark.png             # CPU+GPU 双烤 10 分钟温度曲线(稳定约 63°C)
-├── cad_files                     # SolidWorks 图纸(CNC 加工用)
-│   ├── OrangePiZero3W.SLDASM     # 整机装配体
-│   ├── HeatSink.SLDPRT           # 散热器主体(CNC 加工件)
-│   ├── BottomShell.SLDPRT        # 底部安装板(CNC 加工或 PETG 3D 打印)
-│   ├── Single16x16x6.SLDPRT      # 16×16×6 mm 鳍片单体(外购件,淘宝链接见上文)
-│   ├── Zero3W.SLDPRT             # 主板参考模型
-│   └── Fan 2006 (SENKAYS).SLDASM # 2006 风扇装配体(外购件)
-└── scripts                       # 开发/验证辅助脚本(普通用户可不看)
-    ├── remote_check.sh           # 远程勘查 PWM/温度接口
-    ├── test_on_board.sh          # 假温度文件逻辑测试
-    ├── temp_verify.sh            # 满载温度响应实验(确认风扇方向)
-    ├── demo_verify.sh            # 服务闭环压测演示
-    └── verify_boot.sh            # 重启自启动验证
+│   ├── pin_map.webp              # Zero3W 40-pin header pinout diagram
+│   ├── pin_connection.jpg        # Actual fan-to-board wiring photo
+│   └── benchmark.png             # CPU+GPU 10-min dual-stress temperature chart (~63°C stable)
+├── cad_files                     # SolidWorks drawings (for CNC machining)
+│   ├── OrangePiZero3W.SLDASM     # Full assembly
+│   ├── HeatSink.SLDPRT           # Heatsink body (CNC machined part)
+│   ├── BottomShell.SLDPRT        # Bottom plate (CNC machining or PETG 3D print)
+│   ├── Single16x16x6.SLDPRT      # 16×16×6 mm fin unit (off-the-shelf; Taobao link above)
+│   ├── Zero3W.SLDPRT             # Board reference model
+│   └── Fan 2006 (SENKAYS).SLDASM # 2006 fan assembly (off-the-shelf part)
+└── scripts                       # Dev/verification helper scripts (optional reading)
+    ├── remote_check.sh           # Remote survey of PWM/temperature interfaces
+    ├── test_on_board.sh          # Fake-temperature-file logic test
+    ├── temp_verify.sh            # Full-load temperature-response experiment (confirms fan direction)
+    ├── demo_verify.sh            # Closed-loop service stress demo
+    └── verify_boot.sh            # Boot auto-start verification
 ```
 
-> `scripts/` 中的脚本为开发时的验证工具,内部 IP 等参数需按你的环境修改,仅供参考。
+> The scripts under `scripts/` are development-time verification tools; adjust IP addresses and paths to your environment. For reference only.
 
 ---
 
-## 常见问题 FAQ
+## FAQ
 
-**1. 风扇完全不转?**
+**1. Fan doesn't spin at all?**
 
-- 确认 PWM0 overlay 已启用:`ls /sys/class/pwm/` 应有 `pwmchip0`;
-- 确认接线与 [`img/pin_connection.jpg`](img/pin_connection.jpg) 一致;
-- 看日志:`journalctl -u pwm-fan -n 50`;
-- 手动测试:`sudo /usr/local/sbin/pwm-fan.py --test 100`(全速)与 `--test 0`(停转)。
+- Confirm the PWM0 overlay is enabled: `ls /sys/class/pwm/` must list `pwmchip0`;
+- Confirm the wiring matches [`img/pin_connection.jpg`](img/pin_connection.jpg);
+- Check the log: `journalctl -u pwm-fan -n 50`;
+- Manual test: `sudo /usr/local/sbin/pwm-fan.py --test 100` (full speed) and `--test 0` (stop).
 
-**2. 温度升高了但风扇不加速?**
+**2. Temperature rises but the fan doesn't speed up?**
 
-看日志中"温度 → 占空比"行:若占空比在涨但风扇没反应,是接线/风扇问题;若占空比不涨,检查温度来源(`--show` 查看当前温度是否正常)。
+Look at the "temp → duty" lines in the log: if the duty rises but the fan doesn't react, it's a wiring/fan issue; if the duty doesn't rise, check the temperature source (use `--show` to see the current temperature).
 
-**3. 风扇一直全速停不下来?**
+**3. Fan runs at full speed and never slows down?**
 
-极性映射反了:执行 `sudo /usr/local/sbin/pwm-fan.py --show` 查看 `polarity`,并按上文把 `FORCE_INVERT` 改为相反的值。
+The polarity mapping is reversed: run `sudo /usr/local/sbin/pwm-fan.py --show` to check `polarity`, then set `FORCE_INVERT` to the opposite value as described above.
 
-**4. 待机时风扇也一直转,正常吗?**
+**4. The fan keeps spinning at idle — is that normal?**
 
-正常。本板待机约 48~50°C,按曲线对应 50~60% 转速。若嫌待机吵,可把 `TEMP_ON`/`TEMP_OFF` 调高(如 42/40°C,让待机停转),或整体右移曲线。
+Yes. This board idles around 48~50°C, which the curve maps to 50~60% duty. If the idle noise bothers you, raise `TEMP_ON`/`TEMP_OFF` (e.g. 42/40°C to stay stopped at idle) or shift the whole curve to the right.
 
-**5. 重启后服务没起来?**
+**5. Service didn't come back after a reboot?**
 
-- `systemctl is-enabled pwm-fan` 应为 `enabled`;
-- 确认 `/boot/orangepiEnv.txt` 的 overlay 已保存;
-- `systemctl status pwm-fan` 看错误信息。
+- `systemctl is-enabled pwm-fan` should print `enabled`;
+- Make sure the overlay line in `/boot/orangepiEnv.txt` was saved;
+- Check `systemctl status pwm-fan` for errors.
 
-**6. 想手动调试 sysfs?**
+**6. Want to poke the sysfs interface manually?**
 
 ```bash
-echo 0    | sudo tee /sys/class/pwm/pwmchip0/export     # 导出通道(只需一次)
+echo 0    | sudo tee /sys/class/pwm/pwmchip0/export     # export the channel (once)
 echo 40000 | sudo tee /sys/class/pwm/pwmchip0/pwm0/period  # 25 kHz
-echo 1    | sudo tee /sys/class/pwm/pwmchip0/pwm0/enable   # 使能输出
-echo 0    | sudo tee /sys/class/pwm/pwmchip0/pwm0/duty_cycle   # 本板=全速
-echo 40000 | sudo tee /sys/class/pwm/pwmchip0/pwm0/duty_cycle  # 本板=停转
+echo 1    | sudo tee /sys/class/pwm/pwmchip0/pwm0/enable   # enable the output
+echo 0    | sudo tee /sys/class/pwm/pwmchip0/pwm0/duty_cycle   # on this board = full speed
+echo 40000 | sudo tee /sys/class/pwm/pwmchip0/pwm0/duty_cycle  # on this board = stop
 ```
 
 ---
 
-## 许可
+## License
 
-代码使用 [MIT License](LICENSE)。`cad_files/` 图纸与 `img/` 图片版权归作者所有,未经许可请勿用于商业用途。
+Code is under the [MIT License](LICENSE). The drawings in `cad_files/` and the images in `img/` are copyrighted by the author; do not use them commercially without permission.

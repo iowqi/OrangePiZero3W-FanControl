@@ -13,7 +13,7 @@ fi
 # 1. 检查 PWM 控制器是否可用(需要已启用 pwm0 overlay)
 if [ ! -d /sys/class/pwm/pwmchip0 ]; then
     echo "[错误] 未找到 /sys/class/pwm/pwmchip0"
-    echo "请先启用 PWM0 设备树 overlay(见 README「系统准备:启用 PWM0 overlay」一节),"
+    echo "请先启用 PWM0 设备树 overlay(见 README.zh-CN「系统准备:启用 PWM0 overlay」一节),"
     echo "重启后重新执行本脚本。"
     exit 1
 fi
