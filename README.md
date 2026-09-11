@@ -8,7 +8,7 @@
 
 ![实际接线示意图](img/pin_connection.jpg)
 
-![Zero3W 引脚功能图](img/pin_map.webp)
+![Zero3W 40pin 引脚功能图](img/pin_map.webp)
 
 ---
 
@@ -17,6 +17,7 @@
 - [特性](#特性)
 - [硬件部分](#硬件部分)
   - [材料清单 BOM](#材料清单-bom)
+  - [风扇规格(2004,外购)](#风扇规格2004外购)
   - [CNC 加工(铨洲智造)](#cnc-加工铨洲智造)
   - [接线方法](#接线方法)
 - [软件部署](#软件部署)
@@ -50,13 +51,30 @@
 
 ### 材料清单 BOM
 
-| 名称 | 规格 | 数量 | 说明 |
+| 名称 | 规格 | 数量 | 来源/说明 |
 | --- | --- | --- | --- |
 | 香橙派 Zero3W | — | 1 | 本项目验证于官方镜像 Ubuntu 22.04(Orange Pi 1.0.0 Jammy),内核 `6.6.98-sun60iw2` |
-| CNC 散热器 | 图纸见 `cad_files/` | 1 | 铝合金,推荐铨洲智造加工 |
-| 微型风扇 | **2004**(20×20×4 mm)或 **2006**(20×20×6 mm),**支持 PWM 调速**,5V(以风扇铭牌为准) | 1 | 图纸参考型号 SENKAYS 2006 |
+| 散热器主体 | 图纸见 `cad_files/HeatSink.SLDPRT` | 1 | 铝合金,**铨洲智造 CNC 来图加工** |
+| 散热鳍片 | 16×16×6 mm 铝散热片 | 按图纸 | 🛒 **外购**:[淘宝链接](https://item.taobao.com/item.htm?id=725883202144&skuId=5036273268642) |
+| 底部安装板/外壳 | 图纸见 `cad_files/BottomShell.SLDPRT` | 1 | **CNC 加工**,也可导出 STL 用 **PETG 材质 3D 打印**(更经济) |
+| 微型风扇 | **2004**(20×20×4 mm)或 **2006**(20×20×6 mm),5V,**支持 PWM 调速** | 1 | 🛒 **外购**:[1688 链接(2004)](https://detail.1688.com/offer/841908586658.html),规格见下方 |
 | 连接线 | 杜邦线等 | 若干 | 接线见下方图示 |
 | 固定螺丝 | 按图纸 | 若干 | 散热器与主板固定用 |
+
+### 风扇规格(2004,外购)
+
+购买链接:[1688](https://detail.1688.com/offer/841908586658.html)(2006 为同尺寸兼容型号,图纸中参考型号为 SENKAYS 2006)
+
+| 参数 | 数值 |
+| --- | --- |
+| 尺寸 | 20×20×4 mm(2004) |
+| 电压 | 5V |
+| 功率 | 0.34 W |
+| 转速 | 5000 ~ 15000 RPM |
+| 风量 | 0.5 ~ 1.20 CFM |
+| 风压 | 1.83 ~ 8.35 mmH₂O |
+| 噪音 | 15 ~ 29 dB-A |
+| 重量 | 2 g |
 
 ### CNC 加工(铨洲智造)
 
@@ -65,11 +83,11 @@
 | 文件 | 说明 | 是否加工 |
 | --- | --- | --- |
 | `OrangePiZero3W.SLDASM` | 整机装配体(含风扇、主板、散热器) | 参考 |
-| `HeatSink.SLDPRT` | 散热器主体 | ✅ 加工件 |
-| `BottomShell.SLDPRT` | 底部安装板/外壳 | ✅ 加工件 |
-| `Single16x16x6.SLDPRT` | 16×16×6 mm 散热鳍片单体 | ✅ 加工件 |
+| `HeatSink.SLDPRT` | 散热器主体 | ✅ CNC 加工件 |
+| `BottomShell.SLDPRT` | 底部安装板/外壳 | ✅ CNC 加工件;**也可导出 STL 用 PETG 材质 3D 打印**(更经济) |
+| `Single16x16x6.SLDPRT` | 16×16×6 mm 散热鳍片单体 | 🛒 外购件(仅作装配参考):[淘宝链接](https://item.taobao.com/item.htm?id=725883202144&skuId=5036273268642) |
 | `Zero3W.SLDPRT` | 香橙派 Zero3W 主板模型 | 参考(非加工) |
-| `Fan 2006 (SENKAYS).SLDASM` | 2006 风扇装配体(SENKAYS 型号) | 参考(外购件) |
+| `Fan 2006 (SENKAYS).SLDASM` | 2006 风扇装配体(SENKAYS 型号) | 🛒 外购件(参考) |
 
 下单流程:
 
@@ -78,16 +96,18 @@
 3. 平台自动报价,确认后下单即可。
 
 > 图纸为标准 SolidWorks 格式,也可交给任意支持来图加工的 CNC 厂家;更换厂家时建议用 STEP 格式传图。
+>
+> 底部安装板/外壳若不追求金属质感,可把 `BottomShell.SLDPRT` 导出为 STL,用 **PETG 材质 3D 打印**,成本更低;散热鳍片(16×16×6 mm)为成品铝散热片,直接按上方淘宝链接购买,无需加工。
 
 ### 接线方法
 
-将风扇连接到 Zero3W 的 26pin 排针:
+将风扇连接到 Zero3W 的 40pin 排针:
 
 | 风扇线 | 接到 Zero3W | 说明 |
 | --- | --- | --- |
 | **PWM 调速线** | **PWM0(PB4)引脚** | 具体位置见 [`img/pin_map.webp`](img/pin_map.webp) |
-| 正极(+) | 5V 引脚(排针 2/4 脚) | 若风扇是 3.3V 版本,接 3.3V(排针 1/17 脚) |
-| 负极(-) | GND 引脚(排针 6/9/14/20/25 任一脚) | — |
+| 正极(+) | 5V 引脚(排针 **2/4** 脚) | 若风扇是 3.3V 版本,接 3.3V(排针 **1/17** 脚) |
+| 负极(-) | GND 引脚(排针 **6/9/14/20/25/30/34/39** 任一脚) | — |
 
 实际接线请对照照片 [`img/pin_connection.jpg`](img/pin_connection.jpg)。
 
@@ -274,13 +294,13 @@ OrangePiZero3W-FanControl
 ├── pwm-fan.service               # systemd 服务单元
 ├── install.sh                    # 一键安装脚本(在开发板上运行)
 ├── img
-│   ├── pin_map.webp              # Zero3W 26pin 引脚功能图
+│   ├── pin_map.webp              # Zero3W 40pin 引脚功能图
 │   └── pin_connection.jpg        # 风扇与主板实际接线照片
 ├── cad_files                     # SolidWorks 图纸(CNC 加工用)
 │   ├── OrangePiZero3W.SLDASM     # 整机装配体
-│   ├── HeatSink.SLDPRT           # 散热器主体(加工件)
-│   ├── BottomShell.SLDPRT        # 底部安装板(加工件)
-│   ├── Single16x16x6.SLDPRT      # 16×16×6 mm 鳍片单体(加工件)
+│   ├── HeatSink.SLDPRT           # 散热器主体(CNC 加工件)
+│   ├── BottomShell.SLDPRT        # 底部安装板(CNC 加工或 PETG 3D 打印)
+│   ├── Single16x16x6.SLDPRT      # 16×16×6 mm 鳍片单体(外购件,淘宝链接见上文)
 │   ├── Zero3W.SLDPRT             # 主板参考模型
 │   └── Fan 2006 (SENKAYS).SLDASM # 2006 风扇装配体(外购件)
 └── scripts                       # 开发/验证辅助脚本(普通用户可不看)
