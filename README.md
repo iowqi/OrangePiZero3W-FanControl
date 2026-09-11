@@ -10,6 +10,8 @@ The fan speed follows the CPU temperature automatically — **off below 35°C, f
 
 ![Actual wiring photo](img/pin_connection.jpg)
 
+> Note: here I use polyimide (Kapton) tape to cover the heatsink fins and the 2004 fan, forming an enclosed air duct.
+
 ![Zero3W 40-pin header pinout](img/pin_map.webp)
 
 ---

@@ -10,6 +10,8 @@
 
 ![实际接线示意图](img/pin_connection.jpg)
 
+> 注:这里我使用聚酰亚胺胶带覆盖散热鳍片和 2004 风扇,形成一个密闭的风道。
+
 ![Zero3W 40pin 引脚功能图](img/pin_map.webp)
 
 ---
